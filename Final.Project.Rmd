@@ -1,0 +1,478 @@
+---
+title: "Final Project"
+author: 
+date: 
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(lubridate)
+library(hms)
+library(psych)
+library(ggplot2)
+library(reshape2)
+library(vcd)
+```
+
+```{r}
+file_path = "C:\\Users\\User\\Desktop\\HarvardExtensionSchool\\Stat E 100\\Final Project\\Final.Project.Dataset.csv"
+data = read.csv(file_path)
+data = data %>%
+  rename(Sex = Genero)
+```
+
+```{r}
+# Key to Column Diagnosis
+diagnosis_category_mapping = c(
+  "myocarditis" = "Cardiac",
+  "coartation of aorta" = "Cardiac",
+  "Pulmonary hypertension severe" = "Resp",
+  "diabetic ketoacidosis" = "Endo",
+  "AV canal heart disease" = "Cardiac",
+  "sepsis: intussusception" = "Infection",
+  "postoperative closure AV canal and S. Down" = "Cardiac",
+  "pneumonia and cerebral palsy" = "Resp",
+  "febrile neutropenia" = "Infection",
+  "postoperative appendicitis-peritonitis" = "GI",
+  "pneumonia and pulmonary hypertension" = "Resp",
+  "posterior fossa herniation tumor" = "Neuro",
+  "sepsis" = "Infection",
+  "bronchiolitis" = "Resp",
+  "Pulmonary hypertension moderate" = "Resp",
+  "postoperative appendicitis" = "GI",
+  "postoperative closure VSD and S. Down" = "Cardiac",
+  "pneumonia" = "Resp",
+  "peritonitis" = "GI",
+  "postoperative brain tumor" = "Neuro",
+  "heart failure" = "Cardiac",
+  "patent ductus arteriosus" = "Cardiac",
+  "bronchopulmonary dysplasia and Pulmonary hypertension" = "Resp",
+  "intestinal obstruction" = "GI",
+  "pneumonia ARDS" = "Resp",
+  "abdominal sepsis" = "Infection",
+  "intestinal invagination" = "GI",
+  "ARDS" = "Resp",
+  "convulsive status-encephalitis" = "Neuro",
+  "pneumonia and hydrocephalus" = "Resp",
+  "malnutrition and pneumonia" = "Resp",
+  "postoperative nephrectomy" = "Renal",
+  "severe gastroenteritis dehydration" = "GI",
+  "postoperative pulmonary systemic fistula" = "Resp",
+  "exacerbated systemic lupus erythematosus" = "Immune",
+  "bronchiolitis and pneumonia-pulmonary hypertension" = "Resp",
+  "polytrauma" = "Trauma",
+  "bronchopulmonary dysplasia crisis" = "Resp",
+  "neutropenic colitis" = "Heme",
+  "abdominal trauma" = "Trauma",
+  "septic shock urinary tract infection" = "Infection",
+  "acute lymphocytic leukemia and tumor lysis" = "Heme",
+  "severe asthma attack" = "Resp",
+  "pancreatitis" = "GI",
+  "bronchiolitis and prematurity" = "Resp",
+  "postoperative closure VSD" = "Cardiac",
+  "foreign body airway obstruction" = "Resp",
+  "cloaca postoperative" = "GI",
+  "acute myeloid leukemia and pneumonia" = "Heme",
+  "myocarditis and pneumonia" = "Cardiac",
+  "bronchiolitis and bronchopulmonary dysplasia crisis" = "Resp",
+  "bronchopulmonary dysplasia and pneumonia" = "Resp",
+  "viral pneumonia" = "Resp",
+  "hypoplasic left ventricular syndrome" = "Cardiac",
+  "acute lymphocytic leukemia and pneumonia" = "Heme",
+  "postoperative abdominal mass" = "GI",
+  "bronchiolitis-prematurity-heart disease" = "Cardiac"
+)
+data$Diagnosis_Category = diagnosis_category_mapping[data$Diagnosis]
+data$Diagnosis = diagnosis_category_mapping[data$Diagnosis]
+```
+
+```{r}
+
+data = data %>%
+  mutate(
+    Hour.event..seconds. = case_when(
+      grepl(":", Hour.event..seconds.) & !grepl(":", strsplit(Hour.event..seconds., ":")[[1]][3]) ~ paste0(Hour.event..seconds., ":00"),  # Add seconds if missing
+      TRUE ~ as.character(hms::as_hms(as.numeric(Hour.event..seconds.)))
+    )
+  )
+
+```
+
+```{r}
+data$Age = tolower(data$Age)  
+
+convert_age_to_years = function(age_str) {
+  if (grepl("month", age_str)) {
+    months <- as.numeric(gsub("[^0-9.]", "", age_str))
+    return(months / 12)
+  } else if (grepl("year", age_str) || grepl("año", age_str)) {
+    years <- as.numeric(gsub("[^0-9.]", "", age_str))
+    return(years)
+  }
+  return(as.numeric(gsub("[^0-9.]", "", age_str)))
+}
+
+data$Age = sapply(data$Age, convert_age_to_years)
+```
+
+```{r}
+data$oxygen.saturation= ifelse(toupper(data$oxygen.saturation) == "NORMAL", NA, data$oxygen.saturation)
+data = data %>%
+     filter(!is.na(oxygen.saturation))
+
+```
+
+
+```{r}
+summary(data[c("Age", "Weight..Kg.", "Height..cms.", 
+               "Heart.Rate", "oxygen.saturation", "Respiratory.Rate", 
+               "Systolic.Blood.Pressure", "Diastolic.Blood.Pressure..", 
+               "Mean.Blood.Pressure")])
+```
+```{r}
+cat_variables = c("No..Patients", "Sex", "Diagnosis", "Outcome")
+if (!"Diagnosis" %in% cat_variables) {
+  cat_variables <- c(cat_variables, "Diagnosis")
+}
+results = data.frame(Variable = character(), Category = character(), Frequency = integer(), Percentage = numeric())
+
+for (col in cat_variables) {
+  freq_table <- table(data[[col]])
+  if (length(freq_table) == 0) {
+    next
+  }
+  percent_table = prop.table(freq_table) * 100
+
+  col_results = data.frame(
+    Variable = col,
+    Category = names(freq_table),
+    Frequency = as.integer(freq_table),
+    Percentage = round(as.numeric(percent_table), 2)
+  )
+  
+  results = rbind(results, col_results)
+}
+
+data$oxygen.saturation = as.numeric(data$oxygen.saturation)
+data$oxygen.saturation = ifelse(data$oxygen.saturation > 100, 100, data$oxygen.saturation)
+
+cat_variables = names(data)[sapply(data, function(col) !is.numeric(col))]
+cat_variables = setdiff(cat_variables, "Hour.event..seconds.")  
+
+results
+
+```
+
+```{r}
+unique = data %>% distinct(No..Patients, .keep_all = TRUE)
+cat_column_unique = unique %>% select(No..Patients, Sex, Outcome, Diagnosis)
+
+results = data.frame(Variable = character(), Category = character(), Frequency = integer(), Percentage = numeric())
+
+for (col in names(cat_column_unique)) {
+  freq_table = table(cat_column_unique[[col]])
+  percent_table = prop.table(freq_table) * 100
+  
+  col_results = data.frame(
+    Variable = col,
+    Category = names(freq_table),
+    Frequency = as.integer(freq_table),
+    Percentage = round(as.numeric(percent_table), 2)
+  )
+  
+  results = rbind(results, col_results)
+}
+
+results
+
+```
+
+```{r}
+data = data %>%
+  rename(
+    Patient = No..Patients,
+    Wt = Weight..Kg.,
+    Ht_cm = Height..cms.,
+    Survival = Outcome,
+    Time = Hour.event..seconds.,
+    HR = Heart.Rate,
+    O2 = oxygen.saturation,
+    RR = Respiratory.Rate,
+    SBP = Systolic.Blood.Pressure,
+    DBP = Diastolic.Blood.Pressure..,
+    MAP = Mean.Blood.Pressure
+  )
+
+head(data)
+```
+
+```{r}
+data = data %>%
+  mutate(
+    Sex.D = ifelse(Sex == "male", 1, ifelse(Sex == "female", 2, NA)),
+    
+    Diagnosis.D = case_when(
+      Diagnosis == "Cardiac" ~ 1,
+      Diagnosis == "Endo" ~ 2,
+      Diagnosis == "GI" ~ 3,
+      Diagnosis == "Heme" ~ 4,
+      Diagnosis == "Immune" ~ 5,
+      Diagnosis == "Infection" ~ 6,
+      Diagnosis == "Neuro" ~ 7,
+      Diagnosis == "Renal" ~ 8,
+      Diagnosis == "Resp" ~ 9,
+      Diagnosis == "Trauma" ~ 10,
+      TRUE ~ NA_real_
+    ),
+    
+    Survival.D = ifelse(Survival == "survived", 1, ifelse(Survival == "dead", 2, NA))
+  )
+data = data %>% select(where(~ !all(is.na(.))))
+data = data %>% select(-Diagnosis_Category)
+
+head(data)
+```
+
+```{r}
+# Correlations, target column Surival.D
+cor_data = data %>% select(Age, Wt, Ht_cm, HR, O2, RR, SBP, DBP, MAP, Sex.D, Diagnosis.D, Survival.D)
+
+cor_results = cor_data %>%
+  summarise(
+    Pearson_Age = cor(Age, Survival.D, use = "complete.obs", method = "pearson"),
+    Pearson_Wt = cor(Wt, Survival.D, use = "complete.obs", method = "pearson"),
+    Pearson_Ht_cm = cor(Ht_cm, Survival.D, use = "complete.obs", method = "pearson"),
+    Pearson_HR = cor(HR, Survival.D, use = "complete.obs", method = "pearson"),
+    Pearson_O2 = cor(O2, Survival.D, use = "complete.obs", method = "pearson"),
+    Pearson_RR = cor(RR, Survival.D, use = "complete.obs", method = "pearson"),
+    Pearson_SBP = cor(SBP, Survival.D, use = "complete.obs", method = "pearson"),
+    Pearson_DBP = cor(DBP, Survival.D, use = "complete.obs", method = "pearson"),
+    Pearson_MAP = cor(MAP, Survival.D, use = "complete.obs", method = "pearson"),
+    Biserial_Sex = biserial(Survival.D, Sex.D),
+    Spearman_Diagnosis = cor(Diagnosis.D, Survival.D, use = "complete.obs", method = "spearman")
+  )
+
+cor_results
+```
+
+```{r}
+calc_cor_stats = function(x, y) {
+  test <- cor.test(x, y, use = "complete.obs", method = "pearson")
+  list(R = test$estimate, R_squared = test$estimate^2, p_value = test$p.value)
+}
+
+cor_results = data.frame(
+  Variable = character(),
+  Correlation_Type = character(),
+  R = numeric(),
+  R_squared = numeric(),
+  p_value = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (var in c("Age", "Wt", "Ht_cm", "HR", "O2", "RR", "SBP", "DBP", "MAP")) {
+  stats = calc_cor_stats(data[[var]], data$Survival.D)
+  cor_results = rbind(cor_results, data.frame(
+    Variable = var,
+    Correlation_Type = "Pearson",
+    R = stats$R,
+    R_squared = stats$R_squared,
+    p_value = stats$p_value
+  ))
+}
+
+biserial_sex = biserial(data$Survival.D, data$Sex.D)
+cor_results = rbind(cor_results, data.frame(
+  Variable = "Sex.D",
+  Correlation_Type = "Point-Biserial",
+  R = biserial_sex,
+  R_squared = biserial_sex^2,
+  p_value = NA  
+))
+
+spearman_diag = cor.test(data$Diagnosis.D, data$Survival.D, use = "complete.obs", method = "spearman")
+cor_results <- rbind(cor_results, data.frame(
+  Variable = "Diagnosis.D",
+  Correlation_Type = "Spearman",
+  R = spearman_diag$estimate,
+  R_squared = spearman_diag$estimate^2,
+  p_value = spearman_diag$p.value
+))
+
+cor_results
+```
+```{r}
+calc_cor_stats = function(x, y) {
+  test <- cor.test(x, y, use = "complete.obs", method = "pearson")
+  list(R = test$estimate, R_squared = test$estimate^2, p_value = test$p.value)
+}
+
+cor_results = data.frame(
+  Variable = character(),
+  Correlation_Type = character(),
+  R = numeric(),
+  R_squared = numeric(),
+  p_value = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (var in c("Age", "Wt", "Ht_cm", "HR", "O2", "RR", "SBP", "DBP", "MAP")) {
+  stats = calc_cor_stats(data[[var]], data$Diagnosis.D)
+  cor_results = rbind(cor_results, data.frame(
+    Variable = var,
+    Correlation_Type = "Pearson",
+    R = stats$R,
+    R_squared = stats$R_squared,
+    p_value = stats$p_value
+  ))
+}
+
+biserial_sex = biserial(data$Diagnosis.D, data$Sex.D)
+cor_results = rbind(cor_results, data.frame(
+  Variable = "Sex.D",
+  Correlation_Type = "Point-Biserial",
+  R = biserial_sex,
+  R_squared = biserial_sex^2,
+  p_value = NA  
+))
+
+spearman_survival = cor.test(data$Survival.D, data$Diagnosis.D, use = "complete.obs", method = "spearman")
+cor_results = rbind(cor_results, data.frame(
+  Variable = "Survival.D",
+  Correlation_Type = "Spearman",
+  R = spearman_survival$estimate,
+  R_squared = spearman_survival$estimate^2,
+  p_value = spearman_survival$p.value
+))
+
+cor_results
+```
+
+```{r}
+data = data %>%
+  mutate(Survival.D = ifelse(Survival.D == 1, 0, 1))
+
+logistic_model = glm(Survival.D ~ Age + Wt + Ht_cm + HR + O2 + RR + SBP + DBP + MAP + Sex.D + Diagnosis.D, 
+                      data = data, 
+                      family = binomial(link = "logit"))
+
+summary(logistic_model)
+
+odds_ratios = exp(coef(logistic_model))
+odds_ratios
+
+```
+```{r}
+# Box plot of MAP by Sex
+ggplot(data, aes(x = factor(Sex.D), y = MAP)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(x = "Sex", y = "MAP", title = "MAP by Sex") +
+  theme_minimal()
+
+# Box plot of MAP by Diagnosis
+ggplot(data, aes(x = factor(Diagnosis.D), y = MAP)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(x = "Diagnosis", y = "MAP", title = "MAP by Diagnosis") +
+  theme_minimal()
+
+# Box plot of MAP by Survival
+ggplot(data, aes(x = factor(Survival.D), y = MAP)) +
+  geom_boxplot(fill = "lightcoral") +
+  labs(x = "Survival Status", y = "MAP", title = "MAP by Survival Status") +
+  theme_minimal()
+```
+
+```{r}
+# Redo of summary stats after full clean
+summary(data[c("Age", "Wt", "Ht_cm", 
+                "HR", "O2", "RR", 
+                "SBP", "DBP", 
+                "MAP")])
+```
+```{r}
+
+# Box plot of O2 by Survival
+ggplot(data, aes(x = factor(Survival.D), y = O2)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(x = "Survival", y = "O2", title = "O2 by Survival Status") +
+  theme_minimal()
+```
+
+```{r}
+vital_signs = data[, c("HR", "O2", "RR", "SBP", "DBP", "MAP")]
+
+cor_matrix = cor(vital_signs, use = "complete.obs")
+
+melted_cor = melt(cor_matrix)
+
+ggplot(data = melted_cor, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1, 1), name = "Correlation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  coord_fixed() +
+  labs(title = "Correlation Matrix of Vital Signs")
+```
+
+```{r}
+# Chi Sqaure to Survival
+# Sex.D and Survival.D
+chisq_sex = chisq.test(table(data$Sex.D, data$Survival.D))
+print(chisq_sex)
+
+# Diagnosis.D and Survival.D
+chisq_diagnosis = chisq.test(table(data$Diagnosis.D, data$Survival.D))
+print(chisq_diagnosis)
+
+# Expected values Sex.D and Survival.D
+chisq_sex$expected
+
+# Expected values Diagnosis.D and Survival.D
+chisq_diagnosis$expected
+```
+```{r}
+# Cramér's V
+assocstats(table(data$Diagnosis.D, data$Survival.D))
+```
+```{r}
+# Cell contributions to the Chi square
+contingency_table = table(data$Diagnosis.D, data$Survival.D)
+
+chisq_test = chisq.test(contingency_table)
+
+chisq_test$residuals
+```
+```{r}
+# Survival Proportions by diagnosis
+prop_table = prop.table(contingency_table, margin = 1)
+print(prop_table)
+```
+```{r}
+# Cont table Sex.D vs Survival.D
+sex_survival_table = table(data$Sex.D, data$Survival.D)
+
+prop_table_sex = prop.table(sex_survival_table, margin = 1)
+
+print("Proportions of Survival by Sex:")
+print(prop_table_sex)
+```
+
+
+
+```{r}
+# Bar Graph Dianosis vs Surival via proportion
+data_long = as.data.frame(as.table(contingency_table))
+
+ggplot(data_long, aes(x = Var1, y = Freq, fill = Var2)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(x = "Diagnosis", y = "Proportion", fill = "Survival") +
+  theme_minimal()
+```
